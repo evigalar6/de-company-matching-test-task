@@ -2,6 +2,7 @@ import re
 import pandas as pd
 
 
+# Common legal suffixes and noise tokens for customer/company names.
 _NAME_NOISE = {
     "inc", "incorporated",
     "corp", "corporation",
@@ -15,7 +16,7 @@ _NAME_NOISE = {
     "&", "and",
 }
 
-
+# Map Canadian province full names to 2-letter codes for consistency.
 _CANADA_PROVINCES = {
     "ONTARIO": "ON",
     "BRITISH COLUMBIA": "BC",
@@ -35,6 +36,7 @@ _CANADA_PROVINCES = {
 
 def apply_schema(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame:
     """Rename source columns to a unified schema."""
+    # col_map is {unified_name: source_name}; pandas.rename needs {source_name: unified_name}.
     reverse_map = {src: dst for dst, src in col_map.items()}
     return df.rename(columns=reverse_map).copy()
 
@@ -45,11 +47,15 @@ def normalize_customer_name(name: object) -> str:
         return ""
 
     s = str(name).strip().lower()
+
+    # Replace punctuation with spaces to avoid token glue (e.g., "A-B" -> "A B").
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
 
-    # Normalize common abbreviations.
+    # Normalize common abbreviations to reduce false mismatches (saint vs st).
     s = re.sub(r"\bsaint\b", "st", s)
+
+    # Drop 1-char tokens introduced by punctuation splits (e.g., "mary's" -> "mary s").
     s = " ".join(t for t in s.split() if len(t) > 1)
 
     tokens = [t for t in s.split() if t and t not in _NAME_NOISE]
@@ -65,7 +71,7 @@ def normalize_postal(value: object) -> str:
 
 
 def normalize_text(value: object) -> str:
-    """Normalize generic text fields (lowercase, collapse spaces)."""
+    """Normalize generic text fields (lowercase, collapse whitespace)."""
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
     s = str(value).strip().lower()
@@ -81,11 +87,21 @@ def normalize_state(value: object) -> str:
     return _CANADA_PROVINCES.get(s, s)
 
 
+def normalize_street(value: object) -> str:
+    """Normalize street lines for location overlap checks."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    s = str(value).strip().lower()
+    s = re.sub(r"[^a-z0-9\s]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def build_street_full(df: pd.DataFrame) -> pd.Series:
     """Combine street lines into a single street string."""
     cols = [c for c in ("street1", "street2", "street3") if c in df.columns]
     if not cols:
         return pd.Series([""] * len(df), index=df.index)
+
     parts = [df[c].fillna("").astype(str).str.strip() for c in cols]
     street = parts[0]
     for p in parts[1:]:
@@ -102,24 +118,41 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
     """Apply schema and add normalized columns used by the pipeline."""
     out = apply_schema(df, col_map)
 
+    # Build full street string from available address lines.
     out["street_full"] = build_street_full(out)
-    out["customer_name_norm"] = out["customer_name"].apply(normalize_customer_name)
 
+    # Normalize core fields used for matching and blocking.
+    out["customer_name_norm"] = out["customer_name"].apply(normalize_customer_name)
     out["city_norm"] = out.get("city", pd.Series([""] * len(out))).apply(normalize_text)
     out["state_norm"] = out.get("state", pd.Series([""] * len(out))).apply(normalize_state)
-
     out["postal_norm"] = out.get("postal", pd.Series([""] * len(out))).apply(normalize_postal)
 
     country_raw = out.get("country", pd.Series([""] * len(out))).fillna("")
     out["country_norm"] = country_raw.apply(normalize_text)
 
-    # Fill missing country using country code or postal pattern when possible.
+    # Fill missing country using country_code or postal pattern when possible.
     if "country_code" in out.columns:
-        out.loc[(out["country_norm"] == "") & (out["country_code"].fillna("").astype(str).str.upper() == "CA"), "country_norm"] = "canada"
-    out.loc[(out["country_norm"] == "") & (out["postal_norm"].apply(is_canadian_postal)), "country_norm"] = "canada"
+        is_ca = out["country_code"].fillna("").astype(str).str.upper().eq("CA")
+        out.loc[(out["country_norm"] == "") & is_ca, "country_norm"] = "canada"
+
+    out.loc[(out["country_norm"] == "") & out["postal_norm"].apply(is_canadian_postal), "country_norm"] = "canada"
 
     # Build a blocking key to reduce candidate comparisons.
     out["block_key"] = out["country_norm"] + "|" + out["postal_norm"]
     out.loc[out["postal_norm"] == "", "block_key"] = out["country_norm"] + "|" + out["city_norm"]
+
+    # Build a stable location key for overlap checks.
+    out["street_norm"] = out["street_full"].apply(normalize_street)
+    out["location_key"] = (
+        out["street_norm"]
+        + "|"
+        + out["city_norm"]
+        + "|"
+        + out["state_norm"]
+        + "|"
+        + out["postal_norm"]
+        + "|"
+        + out["country_norm"]
+    )
 
     return out
