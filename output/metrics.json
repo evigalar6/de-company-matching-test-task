@@ -7,6 +7,10 @@
   "match_rate_ds2": 0.48720682302771856,
   "unmatched_records": 0.5181086519114688,
   "ds1_one_to_many_companies": 0,
-  "one_to_many_rate_ds1": 0.0,
+  "one_to_many_rate_ds1_total": 0.0,
+  "one_to_many_rate_ds1_matched": 0.0,
+  "ds2_one_to_many_companies": 32,
+  "one_to_many_rate_ds2_total": 0.03411513859275053,
+  "one_to_many_rate_ds2_matched": 0.0700218818380744,
   "address_level_matches": 501
 }

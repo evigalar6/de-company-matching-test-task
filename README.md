@@ -136,15 +136,27 @@ List columns output are consistent:
 * matched unique companies in each dataset
 * match rates
 * `unmatched_records`: percent of companies without any match across both datasets
-* one-to-many statistics (DS1 companies matching to multiple DS2 companies)
+* one-to-many statistics (we report one-to-many rates both over all DS1 companies and over matched DS1 companies)
 * address-level match count
 
-## Notes / assumptions
+## Data quality issues found
+
+During implementation, several data-quality issues were observed:
+
+- Missing country in Dataset 1: `sCountry` is blank for most rows (≈84%). To keep blocking consistent, the pipeline infers `country_norm = "canada"` when it can be confidently derived from Dataset 2 (`ccode == "CA"`) or from a Canadian postal-code pattern (A1A1A1).
+- Duplicate companies with multiple addresses in Dataset 2: Dataset 2 contains more rows than unique companies (e.g., ~1123 rows but ~938 unique `custnmbr`). Matching is performed at the address level and then aggregated to one row per Dataset 1 company in the merged output.
+- Incomplete street/address lines: address line fields are frequently missing (e.g., Dataset 1 `sStreet2` empty ≈85%; Dataset 2 `address2` empty ≈63% and `address3` empty ≈94%). This makes exact location overlap strict (it may undercount overlap when addresses are partial), so name similarity becomes the primary matching signal.
+- Occasional missing required fields: a small fraction of Dataset 2 rows has empty `addrcode`, `ccode`, `city`, `country` (≈1–2%), and `postal/zip` is empty for a small fraction as well (≈2%). When postal is missing, blocking falls back to `country|city`.
+- Non-standardized country and province/state values: country may appear as `ca`, `canada`, `united states`, or blank; province/state may appear as full names (e.g., `BRITISH COLUMBIA`) or abbreviations. The pipeline normalizes text casing/whitespace and maps common Canadian province names to 2-letter codes where possible.
+- Trailing/irregular whitespace in text fields: some company names and location fields include padded spacing (fixed-width style), so display fields are trimmed/collapsed for readable output.
+
+
+## Notes
 
 * Matching is conservative by design due to blocking on `country|postal` where possible.
   If two datasets do not share the same postal for a company, that company may not be considered a candidate match.
 * This approach prioritizes precision over recall for a simple, readable test-task solution.
-* CSV output stores multi-valued fields as JSON strings for consistent downstream parsing.
+* `overlapping_locations` is left as an empty cell when no overlap is found to comply with the task requirements.
 
 ## Dependencies
 

@@ -26,10 +26,6 @@ def main() -> None:
     """Run the pipeline and write merged output + metrics."""
     paths = Paths()
 
-    def clean_display(value: object) -> str:
-        # Collapse all whitespace (including non-breaking spaces) and trim.
-        return " ".join(str(value or "").split())
-
     # Load raw datasets.
     df1_raw = read_csv(paths.ds1)
     df2_raw = read_csv(paths.ds2)
@@ -61,12 +57,12 @@ def main() -> None:
     # Representative company names (first non-empty), cleaned for readability.
     name1 = (
         df1.groupby("customer_id")["customer_name"]
-        .apply(lambda s: clean_display(s.dropna().astype(str).iloc[0]) if len(s.dropna()) else "")
+        .apply(lambda s: s.dropna().astype(str).map(str.strip).iloc[0] if len(s.dropna()) else "")
         .rename("company_name_ds1")
     )
     name2 = (
         df2.groupby("customer_id")["customer_name"]
-        .apply(lambda s: clean_display(s.dropna().astype(str).iloc[0]) if len(s.dropna()) else "")
+        .apply(lambda s: s.dropna().astype(str).map(str.strip).iloc[0] if len(s.dropna()) else "")
         .rename("company_name_ds2")
     )
 
@@ -113,7 +109,7 @@ def main() -> None:
             return []
         out: list[str] = []
         for cid in ids:
-            nm = clean_display(name2.get(cid, ""))
+            nm = str(name2.get(cid, "") or "").strip()
             if nm:
                 out.append(nm)
         return sorted(set(out))
@@ -142,6 +138,9 @@ def main() -> None:
 
     for c in list_cols:
         merged[c] = merged[c].apply(lambda v: json.dumps(v, ensure_ascii=False))
+
+    # Strict requirement: leave the overlap cell empty when there is no overlap.
+    merged["overlapping_locations"] = merged["overlapping_locations"].apply(lambda s: "" if s == "[]" else s)
 
     # Write deliverables.
     write_csv(merged, paths.out_merged)
