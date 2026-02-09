@@ -236,3 +236,4 @@ data/interim/
 # Secrets
 .env
 .env.*
+/src/scripts.py
