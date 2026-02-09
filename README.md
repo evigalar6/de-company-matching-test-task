@@ -7,6 +7,33 @@ This project matches companies between two CSV datasets and produces:
 
 The implementation uses Python + Pandas and a lightweight fuzzy string match.
 
+## Quick start
+
+1. (Optional) Create and activate a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Put input files into `data/raw/company_dataset_1.csv` and `data/raw/company_dataset_2.csv`
+
+Note: `data/raw/` is excluded from git via `.gitignore`; place the provided CSV files locally before running the pipeline.
+
+4. Run:
+
+```bash
+python3 -m src.main
+```
+
+5. Outputs: `output/merged_companies.csv` and `output/metrics.json`
+
 ## Project structure
 
 ```text
@@ -25,31 +52,6 @@ src/
   metrics.py      # match-rate and ambiguity metrics
   main.py         # orchestration: read -> normalize -> match -> export
 ```
-
-## How to run
-
-1. Create a virtual environment and install dependencies:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-2. Put input files into:
-
-* `data/raw/company_dataset_1.csv`
-* `data/raw/company_dataset_2.csv`
-
-Note: The input data directory (data/raw/) is excluded from git via .gitignore; place the provided CSV files locally before running the pipeline.
-
-3. Run:
-
-```bash
-python3 -m src.main
-```
-
-Outputs will appear in `output/`.
 
 ## What the pipeline does
 
@@ -130,6 +132,7 @@ List columns output are consistent:
 
 * `"[]"` when empty instead of blank/NaN
 * `"[...]"` when populated
+* list-like columns are stored as JSON strings in the CSV (parse with `json.loads(...)` if needed)
 
 ### 5) Metrics
 
