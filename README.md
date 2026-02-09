@@ -42,6 +42,11 @@ basic regressions:
 ```bash
 python3 -m unittest discover -s tests
 ```
+For detailed run results:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## Project structure
 
