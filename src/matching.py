@@ -1,3 +1,10 @@
+"""Address-level matching logic.
+
+Matching is performed from Dataset 1 to Dataset 2. Location information is used
+to restrict candidate comparisons via a blocking key (`block_key`), and then fuzzy
+name similarity is used to select the best candidate within a block.
+"""
+
 from dataclasses import dataclass
 
 import pandas as pd
@@ -69,7 +76,7 @@ def match_datasets(
     name_threshold_strong: float,
     name_threshold_with_postal: float,
 ) -> pd.DataFrame:
-    """Match DS1 to DS2 at the address level using blocking + name similarity.
+    """Match Dataset 1 to Dataset 2 at the address level using blocking + name similarity.
 
     Args:
         ds1_df: Normalized Dataset 1 records.
@@ -84,6 +91,9 @@ def match_datasets(
     Raises:
         ValueError: If expected normalized columns are missing from the inputs.
     """
+    # Note: This is a one-directional matcher (DS1 -> DS2). We pick the single best
+    # name match per DS1 row within a `block_key`. Reciprocal checks or top-k
+    # candidates could be added, but are out of scope for this task.
     required_cols = {"customer_id", "address_code", "block_key", "postal_norm", "customer_name_norm"}
     missing_ds1 = sorted(required_cols - set(ds1_df.columns))
     missing_ds2 = sorted(required_cols - set(ds2_df.columns))

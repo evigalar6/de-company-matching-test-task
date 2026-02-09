@@ -1,14 +1,13 @@
-import re
-
-import pandas as pd
-
-
 """Dataset schema unification and normalization helpers.
 
 The pipeline reads two CSV datasets with different column names, maps them into a
 unified schema, and creates normalized fields/keys used for matching and overlap
 calculations.
 """
+
+import re
+
+import pandas as pd
 
 _NAME_NOISE = {
     "inc", "incorporated",
@@ -245,6 +244,8 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
     country_values = unified_df["country"].fillna("")
     unified_df["country_norm"] = country_values.apply(normalize_text)
 
+    # Dataset 1 has `country` missing for many rows. We infer Canada in a few safe cases
+    # to keep blocking stable across datasets.
     if "country_code" in unified_df.columns:
         is_canada_code = unified_df["country_code"].fillna("").astype(str).str.upper().eq("CA")
         unified_df.loc[(unified_df["country_norm"] == "") & is_canada_code, "country_norm"] = "canada"
@@ -254,7 +255,8 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
         "country_norm",
     ] = "canada"
 
-    # Blocking key keeps candidate comparisons conservative and fast.
+    # Blocking key keeps candidate comparisons conservative and fast:
+    # prefer (country|postal) when available; fall back to (country|city) otherwise.
     unified_df["block_key"] = unified_df["country_norm"] + "|" + unified_df["postal_norm"]
     unified_df.loc[unified_df["postal_norm"] == "", "block_key"] = (
         unified_df["country_norm"] + "|" + unified_df["city_norm"]

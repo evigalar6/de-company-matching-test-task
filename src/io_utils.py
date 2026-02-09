@@ -1,3 +1,5 @@
+"""I/O utilities for reading and writing task datasets."""
+
 from pathlib import Path
 
 import pandas as pd

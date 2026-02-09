@@ -1,3 +1,12 @@
+"""Pipeline orchestration.
+
+Reads raw CSV inputs, normalizes both datasets, performs address-level matching,
+aggregates results to one row per Dataset 1 company, and writes:
+
+- `output/merged_companies.csv`
+- `output/metrics.json`
+"""
+
 import json
 import sys
 from pathlib import Path
@@ -72,15 +81,15 @@ def main() -> None:
     try:
         paths = Paths()
 
-        # Load raw datasets.
+        # 1) Load raw datasets.
         ds1_raw_df = read_csv(paths.ds1)
         ds2_raw_df = read_csv(paths.ds2)
 
-        # Normalize datasets (schema + cleaned fields + block_key + location keys).
+        # 2) Normalize datasets (schema + cleaned fields + block_key + location keys).
         ds1_df = normalize_dataset(ds1_raw_df, DS1_COLS)
         ds2_df = normalize_dataset(ds2_raw_df, DS2_COLS)
 
-        # Address-level matching.
+        # 3) Address-level matching (Dataset 1 -> Dataset 2).
         matches_df = match_datasets(
             ds1_df,
             ds2_df,
@@ -88,7 +97,7 @@ def main() -> None:
             name_threshold_with_postal=float(NAME_THRESHOLD_WITH_POSTAL),
         )
 
-        # Build per-company strict and loose location lists.
+        # 4) Build per-company strict and loose location lists.
         ds1_locations_strict = (
             ds1_df.groupby("customer_id")["location_key"].apply(_clean_key_series).rename("locations_ds1")
         )
@@ -107,7 +116,7 @@ def main() -> None:
             .rename("locations_ds2_loose")
         )
 
-        # Representative company names (first non-empty), cleaned for readability.
+        # 5) Representative company names (first non-empty), cleaned for readability.
         ds1_company_names = (
             ds1_df.groupby("customer_id")["customer_name"]
             .apply(lambda series: _clean_display_text(series.dropna().iloc[0]) if len(series.dropna()) else "")
@@ -119,7 +128,7 @@ def main() -> None:
             .rename("company_name_ds2")
         )
 
-        # Company-level mapping based on address-level matches.
+        # 6) Company-level mapping based on address-level matches.
         company_matches = matches_df.drop_duplicates(subset=["ds1_customer_id", "ds2_customer_id"])
         ds2_company_ids_by_ds1 = (
             company_matches.groupby("ds1_customer_id")["ds2_customer_id"]
@@ -127,7 +136,7 @@ def main() -> None:
             .rename("matched_company_ids_ds2")
         )
 
-        # Assemble final merged output (one row per DS1 company).
+        # 7) Assemble final merged output (one row per Dataset 1 company).
         merged_df = (
             pd.DataFrame({"company_id_ds1": ds1_company_names.index.astype(str)})
             .merge(
@@ -152,6 +161,7 @@ def main() -> None:
             )
         )
 
+        # Helper functions are nested to close over the precomputed per-company Series.
         def collect_ds2_company_names(ds2_company_ids: object) -> list[str]:
             """Collect representative Dataset 2 names for a list of Dataset 2 company ids."""
             if not isinstance(ds2_company_ids, list):
@@ -204,7 +214,7 @@ def main() -> None:
             axis=1,
         )
 
-        # Ensure consistent list-like columns and serialize them as JSON strings for CSV output.
+        # 8) Serialize list-like columns as JSON strings so they survive CSV round-trips.
         list_column_names = [
             "locations_ds1",
             "locations_ds1_loose",
@@ -227,7 +237,7 @@ def main() -> None:
             lambda value: "" if value == "[]" else value
         )
 
-        # Write deliverables.
+        # 9) Write deliverables.
         write_csv(merged_df, paths.out_merged)
 
         metrics = compute_metrics(ds1_df, ds2_df, matches_df)
