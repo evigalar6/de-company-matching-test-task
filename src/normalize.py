@@ -119,17 +119,22 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
     """Apply schema and add normalized columns used by matching and overlap."""
     out = apply_schema(df, col_map)
 
+    # Stabilize identifiers early (avoid dtype inference issues).
+    for c in ("customer_id", "address_code"):
+        if c in out.columns:
+            out[c] = out[c].fillna("").astype(str).map(lambda x: " ".join(x.split()))
+
     # Build full street string from available address lines.
     out["street_full"] = build_street_full(out)
 
     # Normalize fields used for matching.
     out["customer_name_norm"] = out["customer_name"].apply(normalize_customer_name)
-    out["city_norm"] = out.get("city", pd.Series([""] * len(out))).apply(normalize_text)
-    out["state_norm"] = out.get("state", pd.Series([""] * len(out))).apply(normalize_state)
-    out["postal_norm"] = out.get("postal", pd.Series([""] * len(out))).apply(normalize_postal)
+    out["city_norm"] = out.get("city", pd.Series([""] * len(out), index=out.index)).apply(normalize_text)
+    out["state_norm"] = out.get("state", pd.Series([""] * len(out), index=out.index)).apply(normalize_state)
+    out["postal_norm"] = out.get("postal", pd.Series([""] * len(out), index=out.index)).apply(normalize_postal)
 
     # Normalize country and fill missing values when possible.
-    country_raw = out.get("country", pd.Series([""] * len(out))).fillna("")
+    country_raw = out.get("country", pd.Series([""] * len(out), index=out.index)).fillna("")
     out["country_norm"] = country_raw.apply(normalize_text)
 
     if "country_code" in out.columns:

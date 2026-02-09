@@ -30,8 +30,9 @@ def _best_match_for_row(
     best_score = -1.0
     best_cand: pd.Series | None = None
 
-    for _, cand in candidates.iterrows():
-        name2 = str(cand.get("customer_name_norm", "") or "")
+    # itertuples is much faster than iterrows and keeps this readable.
+    for cand in candidates.itertuples(index=False):
+        name2 = str(getattr(cand, "customer_name_norm", "") or "")
         if not name2:
             continue
 
@@ -46,8 +47,8 @@ def _best_match_for_row(
     return MatchRow(
         ds1_customer_id=str(row["customer_id"]),
         ds1_address_code=str(row["address_code"]),
-        ds2_customer_id=str(best_cand["customer_id"]),
-        ds2_address_code=str(best_cand["address_code"]),
+        ds2_customer_id=str(getattr(best_cand, "customer_id")),
+        ds2_address_code=str(getattr(best_cand, "address_code")),
         score=best_score,
     )
 

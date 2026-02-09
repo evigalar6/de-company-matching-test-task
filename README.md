@@ -31,7 +31,7 @@ src/
 1. Create a virtual environment and install dependencies:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -46,7 +46,7 @@ Note: The input data directory (data/raw/) is excluded from git via .gitignore; 
 3. Run:
 
 ```bash
-python -m src.main
+python3 -m src.main
 ```
 
 Outputs will appear in `output/`.
