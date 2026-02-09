@@ -236,4 +236,3 @@ data/interim/
 # Secrets
 .env
 .env.*
->>>>>>> 1cef3a5 (Create initial project structure. Ignore raw input data.)
