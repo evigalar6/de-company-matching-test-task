@@ -124,6 +124,21 @@ def main() -> None:
         axis=1,
     )
 
+    # Ensure consistent list-like columns and serialize them as JSON strings for CSV output.
+    list_cols = [
+        "locations_ds1",
+        "matched_company_ids_ds2",
+        "matched_company_names_ds2",
+        "locations_ds2",
+        "overlapping_locations",
+    ]
+
+    for c in list_cols:
+        merged[c] = merged[c].apply(lambda v: v if isinstance(v, list) else [])
+
+    for c in list_cols:
+        merged[c] = merged[c].apply(lambda v: json.dumps(v, ensure_ascii=False))
+
     # Write deliverables.
     write_csv(merged, paths.out_merged)
 
