@@ -34,6 +34,15 @@ python3 -m src.main
 
 5. Outputs: `output/merged_companies.csv` and `output/metrics.json`
 
+## Tests
+
+The project includes a small `unittest` suite to demonstrate code quality and catch
+basic regressions:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
 ## Project structure
 
 ```text
