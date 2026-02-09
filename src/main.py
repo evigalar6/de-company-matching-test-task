@@ -22,6 +22,27 @@ def write_json(data: dict, path: Path) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def _clean_key_series(s: pd.Series) -> list[str]:
+    """Return a sorted list of non-empty keys, excluding separator-only junk."""
+    values: list[str] = []
+    for v in s.astype(str):
+        vv = v.strip()
+        if not vv:
+            continue
+        if vv.replace("|", "").strip() == "":
+            continue
+        values.append(vv)
+    return sorted(set(values))
+
+
+def _clean_display_text(value: object) -> str:
+    """Trim and collapse whitespace for readable output fields."""
+    if value is None:
+        return ""
+    s = str(value)
+    return " ".join(s.split()).strip()
+
+
 def main() -> None:
     """Run the pipeline and write merged output + metrics."""
     paths = Paths()
@@ -30,7 +51,7 @@ def main() -> None:
     df1_raw = read_csv(paths.ds1)
     df2_raw = read_csv(paths.ds2)
 
-    # Normalize datasets (schema + cleaned fields + block_key + location_key).
+    # Normalize datasets (schema + cleaned fields + block_key + location keys).
     df1 = normalize_dataset(df1_raw, DS1_COLS)
     df2 = normalize_dataset(df2_raw, DS2_COLS)
 
@@ -42,27 +63,38 @@ def main() -> None:
         name_threshold_with_postal=float(NAME_THRESHOLD_WITH_POSTAL),
     )
 
-    # Build per-company location lists (unique sets).
-    loc1 = (
+    # Build per-company strict and loose location lists.
+    loc1_strict = (
         df1.groupby("customer_id")["location_key"]
-        .apply(lambda s: sorted(set(s.dropna().astype(str))))
+        .apply(_clean_key_series)
         .rename("locations_ds1")
     )
-    loc2 = (
+    loc2_strict = (
         df2.groupby("customer_id")["location_key"]
-        .apply(lambda s: sorted(set(s.dropna().astype(str))))
-        .rename("locations_ds2")
+        .apply(_clean_key_series)
+        .rename("locations_ds2_strict")
+    )
+
+    loc1_loose = (
+        df1.groupby("customer_id")["location_key_loose"]
+        .apply(_clean_key_series)
+        .rename("locations_ds1_loose")
+    )
+    loc2_loose = (
+        df2.groupby("customer_id")["location_key_loose"]
+        .apply(_clean_key_series)
+        .rename("locations_ds2_loose")
     )
 
     # Representative company names (first non-empty), cleaned for readability.
     name1 = (
         df1.groupby("customer_id")["customer_name"]
-        .apply(lambda s: s.dropna().astype(str).map(str.strip).iloc[0] if len(s.dropna()) else "")
+        .apply(lambda s: _clean_display_text(s.dropna().iloc[0]) if len(s.dropna()) else "")
         .rename("company_name_ds1")
     )
     name2 = (
         df2.groupby("customer_id")["customer_name"]
-        .apply(lambda s: s.dropna().astype(str).map(str.strip).iloc[0] if len(s.dropna()) else "")
+        .apply(lambda s: _clean_display_text(s.dropna().iloc[0]) if len(s.dropna()) else "")
         .rename("company_name_ds2")
     )
 
@@ -83,7 +115,12 @@ def main() -> None:
             how="left",
         )
         .merge(
-            loc1.reset_index().rename(columns={"customer_id": "company_id_ds1"}),
+            loc1_strict.reset_index().rename(columns={"customer_id": "company_id_ds1"}),
+            on="company_id_ds1",
+            how="left",
+        )
+        .merge(
+            loc1_loose.reset_index().rename(columns={"customer_id": "company_id_ds1"}),
             on="company_id_ds1",
             how="left",
         )
@@ -94,30 +131,49 @@ def main() -> None:
         )
     )
 
-    def ds2_locations(ids: object) -> list[str]:
-        """Collect unique DS2 location keys for a list of DS2 company ids."""
-        if not isinstance(ids, list):
-            return []
-        out: list[str] = []
-        for cid in ids:
-            out.extend(loc2.get(cid, []))
-        return sorted(set(out))
-
     def ds2_names(ids: object) -> list[str]:
         """Collect representative DS2 company names for a list of DS2 company ids."""
         if not isinstance(ids, list):
             return []
         out: list[str] = []
         for cid in ids:
-            nm = str(name2.get(cid, "") or "").strip()
+            nm = _clean_display_text(name2.get(cid, ""))
             if nm:
                 out.append(nm)
         return sorted(set(out))
 
-    merged["matched_company_names_ds2"] = merged["matched_company_ids_ds2"].apply(ds2_names)
-    merged["locations_ds2"] = merged["matched_company_ids_ds2"].apply(ds2_locations)
+    def ds2_locations_strict(ids: object) -> list[str]:
+        """Collect strict DS2 location keys for a list of DS2 company ids."""
+        if not isinstance(ids, list):
+            return []
+        out: list[str] = []
+        for cid in ids:
+            out.extend(loc2_strict.get(cid, []))
+        return sorted(set(out))
 
+    def ds2_locations_loose(ids: object) -> list[str]:
+        """Collect loose DS2 location keys for a list of DS2 company ids."""
+        if not isinstance(ids, list):
+            return []
+        out: list[str] = []
+        for cid in ids:
+            out.extend(loc2_loose.get(cid, []))
+        return sorted(set(out))
+
+    merged["matched_company_names_ds2"] = merged["matched_company_ids_ds2"].apply(ds2_names)
+    merged["locations_ds2"] = merged["matched_company_ids_ds2"].apply(ds2_locations_strict)
+    merged["locations_ds2_loose"] = merged["matched_company_ids_ds2"].apply(ds2_locations_loose)
+
+    # Human-friendly overlap: ignore street differences (city|state|postal|country).
     merged["overlapping_locations"] = merged.apply(
+        lambda r: sorted(set(r["locations_ds1_loose"]) & set(r["locations_ds2_loose"]))
+        if isinstance(r.get("locations_ds1_loose"), list) and isinstance(r.get("locations_ds2_loose"), list)
+        else [],
+        axis=1,
+    )
+
+    # Strict overlap retained as an extra column for transparency/debugging.
+    merged["overlapping_locations_strict"] = merged.apply(
         lambda r: sorted(set(r["locations_ds1"]) & set(r["locations_ds2"]))
         if isinstance(r.get("locations_ds1"), list) and isinstance(r.get("locations_ds2"), list)
         else [],
@@ -127,10 +183,13 @@ def main() -> None:
     # Ensure consistent list-like columns and serialize them as JSON strings for CSV output.
     list_cols = [
         "locations_ds1",
+        "locations_ds1_loose",
         "matched_company_ids_ds2",
         "matched_company_names_ds2",
         "locations_ds2",
+        "locations_ds2_loose",
         "overlapping_locations",
+        "overlapping_locations_strict",
     ]
 
     for c in list_cols:

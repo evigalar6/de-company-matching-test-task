@@ -157,6 +157,7 @@ During implementation, several data-quality issues were observed:
   If two datasets do not share the same postal for a company, that company may not be considered a candidate match.
 * This approach prioritizes precision over recall for a simple, readable test-task solution.
 * `overlapping_locations` is left as an empty cell when no overlap is found to comply with the task requirements.
+* `overlapping_locations` is also computed using a loose location definition (city|state|postal|country) to avoid undercounting overlap due to street formatting differences; a strict version is also provided as overlapping_locations_strict.
 
 ## Dependencies
 

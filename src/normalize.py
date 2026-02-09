@@ -89,7 +89,7 @@ def normalize_customer_name(name: object) -> str:
 
 
 def normalize_street(value: object) -> str:
-    """Normalize street lines for location overlap checks."""
+    """Normalize street lines for strict location overlap checks."""
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
     s = str(value).strip().lower()
@@ -115,26 +115,30 @@ def is_canadian_postal(postal_norm: str) -> bool:
     return bool(re.fullmatch(r"[A-Z]\d[A-Z]\d[A-Z]\d", postal_norm))
 
 
+def _make_key(parts: list[str]) -> str:
+    """Build a pipe-separated key; return empty string if all parts are empty."""
+    joined = "|".join(parts)
+    # If joined contains only separators (e.g., "||||"), treat as empty.
+    if joined.replace("|", "").strip() == "":
+        return ""
+    return joined
+
+
 def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame:
     """Apply schema and add normalized columns used by matching and overlap."""
     out = apply_schema(df, col_map)
-
-    # Stabilize identifiers early (avoid dtype inference issues).
-    for c in ("customer_id", "address_code"):
-        if c in out.columns:
-            out[c] = out[c].fillna("").astype(str).map(lambda x: " ".join(x.split()))
 
     # Build full street string from available address lines.
     out["street_full"] = build_street_full(out)
 
     # Normalize fields used for matching.
     out["customer_name_norm"] = out["customer_name"].apply(normalize_customer_name)
-    out["city_norm"] = out.get("city", pd.Series([""] * len(out), index=out.index)).apply(normalize_text)
-    out["state_norm"] = out.get("state", pd.Series([""] * len(out), index=out.index)).apply(normalize_state)
-    out["postal_norm"] = out.get("postal", pd.Series([""] * len(out), index=out.index)).apply(normalize_postal)
+    out["city_norm"] = out.get("city", pd.Series([""] * len(out))).apply(normalize_text)
+    out["state_norm"] = out.get("state", pd.Series([""] * len(out))).apply(normalize_state)
+    out["postal_norm"] = out.get("postal", pd.Series([""] * len(out))).apply(normalize_postal)
 
     # Normalize country and fill missing values when possible.
-    country_raw = out.get("country", pd.Series([""] * len(out), index=out.index)).fillna("")
+    country_raw = out.get("country", pd.Series([""] * len(out))).fillna("")
     out["country_norm"] = country_raw.apply(normalize_text)
 
     if "country_code" in out.columns:
@@ -147,18 +151,32 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
     out["block_key"] = out["country_norm"] + "|" + out["postal_norm"]
     out.loc[out["postal_norm"] == "", "block_key"] = out["country_norm"] + "|" + out["city_norm"]
 
-    # Build a stable location key for overlap checks.
+    # Strict location key (includes street) for exact overlap checks.
     out["street_norm"] = out["street_full"].apply(normalize_street)
-    out["location_key"] = (
-        out["street_norm"]
-        + "|"
-        + out["city_norm"]
-        + "|"
-        + out["state_norm"]
-        + "|"
-        + out["postal_norm"]
-        + "|"
-        + out["country_norm"]
+    out["location_key"] = out.apply(
+        lambda r: _make_key(
+            [
+                str(r.get("street_norm", "") or ""),
+                str(r.get("city_norm", "") or ""),
+                str(r.get("state_norm", "") or ""),
+                str(r.get("postal_norm", "") or ""),
+                str(r.get("country_norm", "") or ""),
+            ]
+        ),
+        axis=1,
+    )
+
+    # Loose location key (no street) for human-friendly overlap checks.
+    out["location_key_loose"] = out.apply(
+        lambda r: _make_key(
+            [
+                str(r.get("city_norm", "") or ""),
+                str(r.get("state_norm", "") or ""),
+                str(r.get("postal_norm", "") or ""),
+                str(r.get("country_norm", "") or ""),
+            ]
+        ),
+        axis=1,
     )
 
     return out
