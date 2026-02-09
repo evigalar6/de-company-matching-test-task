@@ -54,15 +54,15 @@ def main() -> None:
         .rename("locations_ds2")
     )
 
-    # Representative company names (first non-empty).
+    # Representative company names (first non-empty), cleaned for readability.
     name1 = (
         df1.groupby("customer_id")["customer_name"]
-        .apply(lambda s: s.dropna().astype(str).iloc[0] if len(s.dropna()) else "")
+        .apply(lambda s: s.dropna().astype(str).map(str.strip).iloc[0] if len(s.dropna()) else "")
         .rename("company_name_ds1")
     )
     name2 = (
         df2.groupby("customer_id")["customer_name"]
-        .apply(lambda s: s.dropna().astype(str).iloc[0] if len(s.dropna()) else "")
+        .apply(lambda s: s.dropna().astype(str).map(str.strip).iloc[0] if len(s.dropna()) else "")
         .rename("company_name_ds2")
     )
 
@@ -109,9 +109,9 @@ def main() -> None:
             return []
         out: list[str] = []
         for cid in ids:
-            nm = name2.get(cid, "")
+            nm = str(name2.get(cid, "") or "").strip()
             if nm:
-                out.append(str(nm))
+                out.append(nm)
         return sorted(set(out))
 
     merged["matched_company_names_ds2"] = merged["matched_company_ids_ds2"].apply(ds2_names)
