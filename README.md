@@ -121,7 +121,8 @@ Columns in `output/merged_companies.csv`:
 * `matched_company_ids_ds2` (list; empty if no match)
 * `matched_company_names_ds2` (list; empty if no match)
 * `locations_ds2` (list of DS2 `location_key` aggregated across matched DS2 ids)
-* `overlapping_locations` (list intersection of `locations_ds1` and `locations_ds2`)
+* `overlapping_locations` (strict full address intersection of locations_ds1 and locations_ds2)
+* `overlapping_locations_loose` (optional; overlap ignoring street differences)
 
 List columns output are consistent:
 
@@ -157,7 +158,8 @@ During implementation, several data-quality issues were observed:
   If two datasets do not share the same postal for a company, that company may not be considered a candidate match.
 * This approach prioritizes precision over recall for a simple, readable test-task solution.
 * `overlapping_locations` is left as an empty cell when no overlap is found to comply with the task requirements.
-* `overlapping_locations` is also computed using a loose location definition (city|state|postal|country) to avoid undercounting overlap due to street formatting differences; a strict version is also provided as overlapping_locations_strict.
+* `overlapping_locations` is computed using a loose location definition (city|state|postal|country) to avoid undercounting overlap due to street formatting differences; a strict version is also provided as overlapping_locations_strict.
+* `overlapping_locations_loose` is provided as an auxiliary signal because real-world street strings may differ across sources.
 
 ## Dependencies
 

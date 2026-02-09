@@ -72,7 +72,7 @@ def main() -> None:
     loc2_strict = (
         df2.groupby("customer_id")["location_key"]
         .apply(_clean_key_series)
-        .rename("locations_ds2_strict")
+        .rename("locations_ds2")
     )
 
     loc1_loose = (
@@ -164,18 +164,18 @@ def main() -> None:
     merged["locations_ds2"] = merged["matched_company_ids_ds2"].apply(ds2_locations_strict)
     merged["locations_ds2_loose"] = merged["matched_company_ids_ds2"].apply(ds2_locations_loose)
 
-    # Human-friendly overlap: ignore street differences (city|state|postal|country).
+    # Strict overlap: full address key (includes street) — matches the task wording.
     merged["overlapping_locations"] = merged.apply(
-        lambda r: sorted(set(r["locations_ds1_loose"]) & set(r["locations_ds2_loose"]))
-        if isinstance(r.get("locations_ds1_loose"), list) and isinstance(r.get("locations_ds2_loose"), list)
+        lambda r: sorted(set(r["locations_ds1"]) & set(r["locations_ds2"]))
+        if isinstance(r.get("locations_ds1"), list) and isinstance(r.get("locations_ds2"), list)
         else [],
         axis=1,
     )
 
-    # Strict overlap retained as an extra column for transparency/debugging.
-    merged["overlapping_locations_strict"] = merged.apply(
-        lambda r: sorted(set(r["locations_ds1"]) & set(r["locations_ds2"]))
-        if isinstance(r.get("locations_ds1"), list) and isinstance(r.get("locations_ds2"), list)
+    # Loose overlap: ignores street differences (city|state|postal|country) — helpful for analysis.
+    merged["overlapping_locations_loose"] = merged.apply(
+        lambda r: sorted(set(r["locations_ds1_loose"]) & set(r["locations_ds2_loose"]))
+        if isinstance(r.get("locations_ds1_loose"), list) and isinstance(r.get("locations_ds2_loose"), list)
         else [],
         axis=1,
     )
@@ -189,7 +189,7 @@ def main() -> None:
         "locations_ds2",
         "locations_ds2_loose",
         "overlapping_locations",
-        "overlapping_locations_strict",
+        "overlapping_locations_loose",
     ]
 
     for c in list_cols:
@@ -198,7 +198,7 @@ def main() -> None:
     for c in list_cols:
         merged[c] = merged[c].apply(lambda v: json.dumps(v, ensure_ascii=False))
 
-    # Strict requirement: leave the overlap cell empty when there is no overlap.
+    # Strict requirement: leave the strict overlap cell empty when there is no overlap.
     merged["overlapping_locations"] = merged["overlapping_locations"].apply(lambda s: "" if s == "[]" else s)
 
     # Write deliverables.

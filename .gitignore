@@ -31,4 +31,4 @@ Thumbs.db
 # Data (raw inputs are provided externally for this task)
 data/raw/
 data/interim/
-
+output/_backup/

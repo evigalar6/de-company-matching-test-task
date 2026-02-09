@@ -3,7 +3,6 @@ import re
 import pandas as pd
 
 
-# Common legal suffixes and noise tokens for customer/company names.
 _NAME_NOISE = {
     "inc", "incorporated",
     "corp", "corporation",
@@ -17,7 +16,6 @@ _NAME_NOISE = {
     "&", "and",
 }
 
-# Map Canadian province full names to 2-letter codes for consistency.
 _CANADA_PROVINCES = {
     "ONTARIO": "ON",
     "BRITISH COLUMBIA": "BC",
@@ -37,7 +35,6 @@ _CANADA_PROVINCES = {
 
 def apply_schema(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame:
     """Rename source columns to a unified schema."""
-    # col_map is {unified_name: source_name}; pandas.rename needs {source_name: unified_name}.
     reverse_map = {src: dst for dst, src in col_map.items()}
     return df.rename(columns=reverse_map).copy()
 
@@ -73,15 +70,10 @@ def normalize_customer_name(name: object) -> str:
         return ""
 
     s = str(name).strip().lower()
-
-    # Replace punctuation with spaces (e.g., "A-B" -> "A B").
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
 
-    # Normalize common abbreviations to reduce false mismatches.
     s = re.sub(r"\bsaint\b", "st", s)
-
-    # Drop 1-char tokens introduced by punctuation splits (e.g., "mary's" -> "mary s").
     s = " ".join(t for t in s.split() if len(t) > 1)
 
     tokens = [t for t in s.split() if t and t not in _NAME_NOISE]
@@ -118,7 +110,6 @@ def is_canadian_postal(postal_norm: str) -> bool:
 def _make_key(parts: list[str]) -> str:
     """Build a pipe-separated key; return empty string if all parts are empty."""
     joined = "|".join(parts)
-    # If joined contains only separators (e.g., "||||"), treat as empty.
     if joined.replace("|", "").strip() == "":
         return ""
     return joined
@@ -128,16 +119,13 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
     """Apply schema and add normalized columns used by matching and overlap."""
     out = apply_schema(df, col_map)
 
-    # Build full street string from available address lines.
     out["street_full"] = build_street_full(out)
 
-    # Normalize fields used for matching.
     out["customer_name_norm"] = out["customer_name"].apply(normalize_customer_name)
     out["city_norm"] = out.get("city", pd.Series([""] * len(out))).apply(normalize_text)
     out["state_norm"] = out.get("state", pd.Series([""] * len(out))).apply(normalize_state)
     out["postal_norm"] = out.get("postal", pd.Series([""] * len(out))).apply(normalize_postal)
 
-    # Normalize country and fill missing values when possible.
     country_raw = out.get("country", pd.Series([""] * len(out))).fillna("")
     out["country_norm"] = country_raw.apply(normalize_text)
 
@@ -147,11 +135,9 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
 
     out.loc[(out["country_norm"] == "") & out["postal_norm"].apply(is_canadian_postal), "country_norm"] = "canada"
 
-    # Build a blocking key to reduce candidate comparisons.
     out["block_key"] = out["country_norm"] + "|" + out["postal_norm"]
     out.loc[out["postal_norm"] == "", "block_key"] = out["country_norm"] + "|" + out["city_norm"]
 
-    # Strict location key (includes street) for exact overlap checks.
     out["street_norm"] = out["street_full"].apply(normalize_street)
     out["location_key"] = out.apply(
         lambda r: _make_key(
@@ -166,7 +152,6 @@ def normalize_dataset(df: pd.DataFrame, col_map: dict[str, str]) -> pd.DataFrame
         axis=1,
     )
 
-    # Loose location key (no street) for human-friendly overlap checks.
     out["location_key_loose"] = out.apply(
         lambda r: _make_key(
             [
