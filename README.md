@@ -42,6 +42,7 @@ pip install -r requirements.txt
 * `data/raw/company_dataset_2.csv`
 
 Note: The input data directory (data/raw/) is excluded from git via .gitignore; place the provided CSV files locally before running the pipeline.
+
 3. Run:
 
 ```bash
