@@ -1,13 +1,12 @@
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 from rapidfuzz import fuzz
 
 
 @dataclass(frozen=True)
-class MatchResult:
-    """A single best-match result for a DS1 row."""
+class MatchRow:
+    """A single address-level match between DS1 and DS2."""
     ds1_customer_id: str
     ds1_address_code: str
     ds2_customer_id: str
@@ -15,71 +14,72 @@ class MatchResult:
     score: float
 
 
-def build_block_index(df2: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """Group DS2 rows by block_key for fast candidate lookup."""
-    return {k: g for k, g in df2.groupby("block_key", sort=False)}
+def _best_match_for_row(
+    row: pd.Series,
+    candidates: pd.DataFrame,
+    name_threshold: float,
+) -> MatchRow | None:
+    """Find the best DS2 candidate for one DS1 row within the same block."""
+    if candidates.empty:
+        return None
 
-
-def pick_best_match(ds1_row: pd.Series, candidates: pd.DataFrame) -> Optional[tuple[pd.Series, float]]:
-    """Return the best candidate row and its fuzzy score."""
-    name1 = ds1_row["customer_name_norm"]
-    if not name1 or candidates.empty:
+    name1 = str(row.get("customer_name_norm", "") or "")
+    if not name1:
         return None
 
     best_score = -1.0
-    best_row = None
+    best_cand: pd.Series | None = None
 
     for _, cand in candidates.iterrows():
-        name2 = cand["customer_name_norm"]
+        name2 = str(cand.get("customer_name_norm", "") or "")
         if not name2:
             continue
+
         score = float(fuzz.token_set_ratio(name1, name2))
         if score > best_score:
             best_score = score
-            best_row = cand
+            best_cand = cand
 
-    if best_row is None:
+    if best_cand is None or best_score < name_threshold:
         return None
-    return best_row, best_score
+
+    return MatchRow(
+        ds1_customer_id=str(row["customer_id"]),
+        ds1_address_code=str(row["address_code"]),
+        ds2_customer_id=str(best_cand["customer_id"]),
+        ds2_address_code=str(best_cand["address_code"]),
+        score=best_score,
+    )
 
 
 def match_datasets(
     df1: pd.DataFrame,
     df2: pd.DataFrame,
-    name_threshold_strong: float = 95.0,
-    name_threshold_with_postal: float = 86.0,
+    name_threshold_strong: float,
+    name_threshold_with_postal: float,
 ) -> pd.DataFrame:
-    """Match DS1 to DS2 using block_key + fuzzy name similarity."""
-    block_index = build_block_index(df2)
+    """Match DS1 to DS2 at the address level using blocking + name similarity.
 
-    results: list[MatchResult] = []
+    Strategy:
+    - Compare only records with the same block_key.
+    - If block_key is based on postal, allow a slightly lower name threshold.
+    - Otherwise (city-based fallback), require a strong name match.
+    """
+    df2_by_block = {k: g for k, g in df2.groupby("block_key", sort=False)}
 
-    for _, row1 in df1.iterrows():
-        block_key = row1["block_key"]
-        candidates = block_index.get(block_key)
+    results: list[MatchRow] = []
+
+    for _, r in df1.iterrows():
+        block_key = str(r.get("block_key", "") or "")
+        candidates = df2_by_block.get(block_key)
         if candidates is None:
             continue
 
-        best = pick_best_match(row1, candidates)
-        if best is None:
-            continue
+        postal_norm = str(r.get("postal_norm", "") or "")
+        threshold = name_threshold_with_postal if postal_norm else name_threshold_strong
 
-        best_row, score = best
+        match = _best_match_for_row(r, candidates, threshold)
+        if match is not None:
+            results.append(match)
 
-        postal_present = bool(row1["postal_norm"])
-        threshold = name_threshold_with_postal if postal_present else name_threshold_strong
-
-        if score < threshold:
-            continue
-
-        results.append(
-            MatchResult(
-                ds1_customer_id=str(row1["customer_id"]),
-                ds1_address_code=str(row1["address_code"]),
-                ds2_customer_id=str(best_row["customer_id"]),
-                ds2_address_code=str(best_row["address_code"]),
-                score=score,
-            )
-        )
-
-    return pd.DataFrame([r.__dict__ for r in results])
+    return pd.DataFrame([m.__dict__ for m in results])

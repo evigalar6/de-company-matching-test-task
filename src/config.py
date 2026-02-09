@@ -14,6 +14,7 @@ class Paths:
 
 
 # Map dataset columns to a unified schema used across the pipeline.
+# The unified schema keys are the column names expected by normalize.py.
 DS1_COLS = {
     "customer_id": "custnmbr",
     "address_code": "addrcode",
@@ -42,5 +43,5 @@ DS2_COLS = {
 
 
 # Matching thresholds.
-NAME_THRESHOLD_STRONG = 95  # Use for name-only matches.
+NAME_THRESHOLD_STRONG = 95  # Use when relying mostly on name similarity.
 NAME_THRESHOLD_WITH_POSTAL = 86  # Allow lower name score when postal codes match.

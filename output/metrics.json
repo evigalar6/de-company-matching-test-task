@@ -1,0 +1,12 @@
+{
+  "ds1_companies_total": 1050,
+  "ds2_companies_total": 938,
+  "ds1_matched_companies": 501,
+  "ds2_matched_companies": 457,
+  "match_rate_ds1": 0.47714285714285715,
+  "match_rate_ds2": 0.48720682302771856,
+  "unmatched_records": 0.5181086519114688,
+  "ds1_one_to_many_companies": 0,
+  "one_to_many_rate_ds1": 0.0,
+  "address_level_matches": 501
+}
