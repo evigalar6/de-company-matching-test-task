@@ -118,11 +118,13 @@ Columns in `output/merged_companies.csv`:
 * `company_id_ds1`
 * `company_name_ds1`
 * `locations_ds1` (list of DS1 `location_key`)
+* `locations_ds1_loose` (list of DS1 `location_key_loose`, i.e. city|state|postal|country)
 * `matched_company_ids_ds2` (list; empty if no match)
 * `matched_company_names_ds2` (list; empty if no match)
 * `locations_ds2` (list of DS2 `location_key` aggregated across matched DS2 ids)
-* `overlapping_locations` (strict full address intersection of locations_ds1 and locations_ds2)
-* `overlapping_locations_loose` (optional; overlap ignoring street differences)
+* `locations_ds2_loose` (list of DS2 `location_key_loose`, i.e. city|state|postal|country)
+* `overlapping_locations` (strict full-address overlap: intersection of `locations_ds1` and `locations_ds2`)
+* `overlapping_locations_loose` (loose overlap ignoring street differences: intersection of `locations_ds1_loose` and `locations_ds2_loose`)
 
 List columns output are consistent:
 
@@ -158,7 +160,6 @@ During implementation, several data-quality issues were observed:
   If two datasets do not share the same postal for a company, that company may not be considered a candidate match.
 * This approach prioritizes precision over recall for a simple, readable test-task solution.
 * `overlapping_locations` is left as an empty cell when no overlap is found to comply with the task requirements.
-* `overlapping_locations` is computed using a loose location definition (city|state|postal|country) to avoid undercounting overlap due to street formatting differences; a strict version is also provided as overlapping_locations_strict.
 * `overlapping_locations_loose` is provided as an auxiliary signal because real-world street strings may differ across sources.
 * Matching is performed from Dataset 1 to Dataset 2 as required by the output schema (one row per Dataset 1 company). Location fields are used for blocking to reduce comparisons; within a block, the best match is selected by normalized name similarity. Reciprocal checks/top-k analysis are possible extensions but were not required for this task.
 
@@ -166,5 +167,5 @@ During implementation, several data-quality issues were observed:
 
 Minimal requirements:
 
-* `pandas==2.2.3`
-* `rapidfuzz==3.9.7`
+* `pandas==2.3.3`
+* `rapidfuzz==3.14.3`
