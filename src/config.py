@@ -42,5 +42,5 @@ DS2_COLS = {
 
 
 # Matching thresholds.
-NAME_THRESHOLD_STRONG = 90  # Use for name-only matches.
+NAME_THRESHOLD_STRONG = 95  # Use for name-only matches.
 NAME_THRESHOLD_WITH_POSTAL = 86  # Allow lower name score when postal codes match.
