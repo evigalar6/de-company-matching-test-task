@@ -237,11 +237,6 @@ def main() -> None:
         for col_name in list_column_names:
             merged_df[col_name] = merged_df[col_name].apply(lambda value: json.dumps(value, ensure_ascii=False))
 
-        # Strict requirement: leave the strict overlap cell empty when there is no overlap.
-        merged_df["overlapping_locations"] = merged_df["overlapping_locations"].apply(
-            lambda value: "" if value == "[]" else value
-        )
-
         # 9) Write deliverables.
         write_csv(merged_df, paths.out_merged)
 
