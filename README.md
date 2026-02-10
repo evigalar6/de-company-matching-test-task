@@ -119,11 +119,14 @@ It also builds two keys:
   * when blocking by postal (stronger constraint), a slightly lower name threshold is allowed
   * when blocking by city only, a stronger name threshold is required
 
-The result is an address-level matches dataframe:
+The matcher produces an **address-level matches DataFrame** in memory (`matches_df`) with columns:
 
 * `ds1_customer_id`, `ds1_address_code`
 * `ds2_customer_id`, `ds2_address_code`
 * `score`
+
+This intermediate result is used to build the company-level output and compute metrics.
+It is not exported to disk by default (only `output/merged_companies.csv` and `output/metrics.json` are written).
 
 ### 4) Company-level merged output
 
@@ -147,6 +150,10 @@ List columns output are consistent:
 * `"[]"` when empty instead of blank/NaN
 * `"[...]"` when populated
 * list-like columns are stored as JSON strings in the CSV (parse with `json.loads(...)` if needed)
+
+Example:
+
+* `matched_company_ids_ds2` can be `"[]"` (no match) or a JSON list like `"[""90E65F0""]"`
 
 ### 5) Metrics
 
