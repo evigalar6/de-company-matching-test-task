@@ -161,6 +161,11 @@ def main() -> None:
             )
         )
 
+        # Represent missing values as empty strings/lists in the final deliverable.
+        # This avoids NaN/null creeping into outputs, where "unknown" vs "empty" can
+        # become ambiguous for reviewers/consumers.
+        merged_df = merged_df.fillna("")
+
         # Helper functions are nested to close over the precomputed per-company Series.
         def collect_ds2_company_names(ds2_company_ids: object) -> list[str]:
             """Collect representative Dataset 2 names for a list of Dataset 2 company ids."""

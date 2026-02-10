@@ -179,6 +179,10 @@ During implementation, several data-quality issues were observed:
 * `overlapping_locations` is left as an empty cell when no overlap is found to comply with the task requirements.
 * `overlapping_locations_loose` is provided as an auxiliary signal because real-world street strings may differ across sources.
 * Matching is performed from Dataset 1 to Dataset 2 as required by the output schema (one row per Dataset 1 company). Location fields are used for blocking to reduce comparisons; within a block, the best match is selected by normalized name similarity. Reciprocal checks/top-k analysis are possible extensions but were not required for this task.
+* Missing-value representation: the outputs intentionally avoid `NaN`/`null`.
+  - Scalar text fields are written as empty strings when missing.
+  - List-like fields are written as JSON `"[]"` when empty.
+  This keeps “empty / not present” distinct from “unknown”, and makes downstream parsing consistent.
 
 ## Dependencies
 
